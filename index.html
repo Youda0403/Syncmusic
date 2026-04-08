@@ -634,13 +634,13 @@ function bcast(msg) {
 
 // 게스트가 받은 방장 상태 적용
 function applyHostState(state, isInit) {
-  R.tracks   = state.tracks   || [];
-  R.curIdx   = state.curIdx   ?? -1;
-  R.playing  = state.playing  ?? false;
+  R.tracks  = state.tracks  || [];
+  R.curIdx  = state.curIdx  ?? -1;
+  R.playing = state.playing ?? false;
   renderList();
 
   if (isInit) {
-    // 첫 INIT: 동기화 버튼 표시 (방장이 재생 중일 때)
+    // 첫 INIT: 트랙 정보만 UI에 반영 (재생 안 함, 동기화 버튼 대기)
     if (R.curIdx >= 0) {
       const t = R.tracks[R.curIdx];
       document.getElementById('trackTitle').textContent = t.title;
@@ -648,8 +648,19 @@ function applyHostState(state, isInit) {
       setThumb(t.videoId);
     }
   } else {
-    // sync_req 응답: 바로 재생
-    if (R.curIdx >= 0) loadTrack(R.curIdx, R.playing, state.time || 0);
+    // SYNC_RESP: 이미 loadTrack 됐으면 seekTo만, 아니면 full load
+    const time = state.time || 0;
+    if (ytPlayer && R.curIdx >= 0) {
+      try {
+        ytPlayer.seekTo(time, true);
+        if (R.playing) ytPlayer.playVideo();
+        else ytPlayer.pauseVideo();
+      } catch(e) {
+        loadTrack(R.curIdx, R.playing, time);
+      }
+    } else if (R.curIdx >= 0) {
+      loadTrack(R.curIdx, R.playing, time);
+    }
   }
 }
 
@@ -871,13 +882,24 @@ function handlePlay() {
 
 // 게스트 동기화 버튼
 function guestSync() {
-  if (!hostConn) return;
-  try { hostConn.send({ type: 'GUEST_SYNC' }); } catch(e){}
+  // 버튼 전환
   document.getElementById('btnSync').style.display = 'none';
   document.getElementById('btnPlay').style.display = 'flex';
   document.getElementById('btnPlay').disabled = false;
   synced = true;
-  showToast('🔄 동기화 중...');
+
+  // 이미 INIT으로 받은 상태로 즉시 로드
+  if (R.curIdx >= 0 && R.tracks.length > 0) {
+    loadTrack(R.curIdx, R.playing, 0);
+    showToast('🔄 동기화 중...');
+  } else {
+    showToast('재생 중인 곡이 없어요');
+  }
+
+  // 방장에게 정확한 현재 시간 요청 (seekTo 보정용)
+  if (hostConn) {
+    try { hostConn.send({ type: 'GUEST_SYNC' }); } catch(e){}
+  }
 }
 
 function applyVol(v) {
