@@ -588,7 +588,7 @@ function onGuestConnect(conn) {
     // 게스트 → 방장 커맨드
     if (msg.type === 'GUEST_PLAY')  { if (ytPlayer) try { ytPlayer.playVideo();  } catch(e){} }
     if (msg.type === 'GUEST_PAUSE') { if (ytPlayer) try { ytPlayer.pauseVideo(); } catch(e){} }
-    if (msg.type === 'GUEST_SYNC')  { conn.send({ type: 'INIT', state: packState() }); }
+    if (msg.type === 'GUEST_SYNC')  { conn.send({ type: 'SYNC_RESP', state: packState() }); }
   });
   conn.on('close', () => {
     const name = guestNames[conn.peer] || '게스트';
@@ -611,9 +611,10 @@ function connectToHost(code) {
     const t = setTimeout(() => rej(new Error('timeout')), 3500);
     hostConn.on('open', () => { clearTimeout(t); res(); });
     hostConn.on('data', msg => {
-      if (msg.type === 'INIT')    applyHostState(msg.state, true);
-      if (msg.type === 'CMD')     applyHostCmd(msg);
-      if (msg.type === 'DISMISS') onDismissed();
+      if (msg.type === 'INIT')      applyHostState(msg.state, true);
+      if (msg.type === 'SYNC_RESP') applyHostState(msg.state, false);
+      if (msg.type === 'CMD')       applyHostCmd(msg);
+      if (msg.type === 'DISMISS')   onDismissed();
     });
     hostConn.on('close', () => {
       if (!R.dismissed) {
