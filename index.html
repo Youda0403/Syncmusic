@@ -1,0 +1,1328 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SyncRoom</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+<style>
+:root {
+  --bg: #f8f8f8;
+  --surface: #ffffff;
+  --surface2: #f2f2f2;
+  --border: #e4e4e4;
+  --ink: #1a1814;
+  --ink2: #888480;
+  --accent: #c8410a;
+  --accent-light: #fff0eb;
+  --success: #2a7a4b;
+  --r: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', sans-serif;
+  min-height: 100vh;
+}
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 999;
+}
+.page { max-width: 900px; margin: 0 auto; padding: 0 20px; }
+
+/* HEADER */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 0 20px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 40px;
+}
+.logo { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+.logo span { color: var(--accent); font-style: italic; }
+.room-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--ink);
+  color: #fff;
+  border-radius: 999px;
+  padding: 7px 16px 7px 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  letter-spacing: 2px;
+}
+.live-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 0 0 rgba(74,222,128,0.4);
+  animation: ripple 2s infinite;
+}
+@keyframes ripple {
+  0% { box-shadow: 0 0 0 0 rgba(74,222,128,0.4); }
+  70% { box-shadow: 0 0 0 7px rgba(74,222,128,0); }
+  100% { box-shadow: 0 0 0 0 rgba(74,222,128,0); }
+}
+
+/* LANDING */
+#landing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0 80px;
+  gap: 32px;
+}
+.cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  width: 100%;
+  max-width: 580px;
+}
+@media (max-width: 480px) { .cards { grid-template-columns: 1fr; } }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.card-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--ink2);
+}
+.card h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+#connStatus {
+  font-size: 13px;
+  color: var(--ink2);
+  text-align: center;
+  min-height: 20px;
+}
+
+/* INPUTS */
+input[type="text"], input[type="url"] {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 11px 14px;
+  color: var(--ink);
+  font-family: 'Syne', sans-serif;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+input:focus { border-color: var(--accent); background: #fff; }
+input::placeholder { color: var(--ink2); opacity: 0.6; }
+.code-input {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 20px;
+  letter-spacing: 6px;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* BUTTONS */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 11px 18px;
+  border-radius: 8px;
+  font-family: 'Pretendard', -apple-system, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.13s;
+  white-space: nowrap;
+}
+.btn-primary { background: var(--ink); color: #fff; }
+.btn-primary:hover { background: #2d2a25; }
+.btn-accent { background: var(--accent); color: #fff; }
+.btn-accent:hover { background: #a83508; }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--ink); }
+.btn-outline:hover { border-color: var(--ink); }
+.btn-ghost { background: transparent; color: var(--ink2); }
+.btn-ghost:hover { color: var(--ink); background: var(--surface2); }
+.btn-sm { padding: 7px 13px; font-size: 13px; border-radius: 6px; }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ROOM */
+#room { display: none; flex-direction: column; gap: 20px; padding-bottom: 60px; }
+#room.visible { display: flex; }
+
+/* PLAYER */
+.player-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.yt-hidden {
+  position: fixed;
+  width: 1px; height: 1px;
+  top: -9999px; left: -9999px;
+  pointer-events: none;
+  overflow: hidden;
+}
+.player-display {
+  padding: 28px 28px 20px;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  min-height: 116px;
+}
+.album-art {
+  width: 76px; height: 76px;
+  border-radius: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.album-art img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
+.album-art .def-icon { font-size: 28px; color: var(--border); }
+.track-meta { flex: 1; min-width: 0; }
+.track-meta .t-title {
+  font-size: 17px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+  letter-spacing: -0.2px;
+}
+.track-meta .t-idle { font-size: 14px; color: var(--ink2); font-style: italic; }
+.track-meta .t-sub { margin-top: 5px; font-size: 12px; color: var(--ink2); font-weight: 500; letter-spacing: 0.5px; }
+.peer-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--ink2);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.peer-chip.on { background: #e8f5ee; border-color: #b6dfc6; color: var(--success); }
+.peer-chip.warn { background: #fff8e8; border-color: #f5dfa0; color: #9a7000; }
+
+.player-error {
+  display: none;
+  margin: 0 28px 14px;
+  padding: 10px 14px;
+  background: #fff3f0;
+  border: 1px solid #fcd5cc;
+  border-radius: 7px;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.controls { padding: 0 28px 22px; display: flex; flex-direction: column; gap: 10px; }
+.prog-row { display: flex; align-items: center; gap: 10px; }
+.time-lbl {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--ink2);
+  min-width: 36px;
+}
+.time-lbl.r { text-align: right; }
+input[type="range"] {
+  -webkit-appearance: none;
+  flex: 1;
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: var(--ink);
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: none;
+  cursor: pointer;
+}
+.ctrl-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.play-btns { display: flex; align-items: center; gap: 6px; }
+.btn-play {
+  width: 46px; height: 46px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: none;
+  color: #fff;
+  font-size: 17px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.13s, background 0.13s;
+}
+.btn-play:hover { transform: scale(1.07); }
+.btn-play:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
+.vol-row { display: flex; align-items: center; gap: 7px; color: var(--ink2); font-size: 14px; }
+.vol-row input { width: 76px; }
+.vol-lbl { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink2); min-width: 30px; }
+
+/* BOTTOM GRID */
+.bottom-grid {
+  display: grid;
+  grid-template-columns: 1fr 290px;
+  gap: 16px;
+}
+@media (max-width: 660px) { .bottom-grid { grid-template-columns: 1fr; } }
+
+/* PANEL */
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
+.panel-head {
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.panel-title { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--ink2); }
+
+/* PLAYLIST */
+.playlist-list { max-height: 360px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.pl-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.12s;
+  position: relative;
+}
+.pl-item:last-child { border-bottom: none; }
+.pl-item:hover { background: var(--surface2); }
+.pl-item.active { background: var(--accent-light); }
+.pl-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--accent);
+}
+.pl-num { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink2); width: 18px; text-align: center; flex-shrink: 0; }
+.pl-info { flex: 1; min-width: 0; }
+.pl-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-actions { display: flex; gap: 3px; opacity: 0; transition: opacity 0.12s; }
+.pl-item:hover .pl-actions { opacity: 1; }
+.pl-btn {
+  width: 24px; height: 24px;
+  border: none; border-radius: 5px;
+  background: var(--surface2); color: var(--ink2);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  transition: all 0.12s;
+}
+.pl-btn:hover { background: var(--border); color: var(--ink); }
+.pl-btn.del:hover { background: #fde8e3; color: var(--accent); }
+.empty-pl { padding: 36px 16px; text-align: center; color: var(--ink2); font-size: 13px; font-style: italic; }
+
+/* SIDE */
+.side-col { display: flex; flex-direction: column; gap: 14px; }
+.add-form { padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.guest-lock { padding: 10px 14px; border-top: 1px solid var(--border); font-size: 12px; color: var(--ink2); background: var(--surface2); display: none; }
+.room-actions { padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.action-row { display: flex; gap: 8px; }
+.action-row .btn { flex: 1; }
+
+/* MODAL */
+.overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
+.overlay.open { display: flex; }
+.modal {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  padding: 32px; width: 100%; max-width: 380px; margin: 20px;
+  display: flex; flex-direction: column; gap: 18px;
+  animation: pop .18s ease;
+}
+@keyframes pop { from { transform: scale(0.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.modal h3 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+.modal p { color: var(--ink2); font-size: 14px; line-height: 1.6; }
+.modal-btns { display: flex; gap: 8px; }
+.modal-btns .btn { flex: 1; }
+
+/* TOAST */
+#toast {
+  position: fixed; bottom: 28px; left: 50%;
+  transform: translateX(-50%) translateY(60px);
+  background: var(--ink); color: #fff; border-radius: 999px;
+  padding: 10px 22px; font-size: 13px; font-weight: 500;
+  z-index: 500; transition: transform 0.25s ease; white-space: nowrap; pointer-events: none;
+}
+#toast.show { transform: translateX(-50%) translateY(0); }
+
+/* MEMBERS PANEL */
+.members-panel { }
+.member-list { padding: 8px 0; }
+.member-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  font-size: 13px;
+}
+.member-avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.member-avatar.host { background: var(--accent-light); color: var(--accent); }
+.member-avatar.guest { background: var(--surface2); color: var(--ink2); }
+.member-name { flex: 1; }
+.member-badge {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+.badge-host { background: var(--accent-light); color: var(--accent); }
+.badge-guest { background: var(--surface2); color: var(--ink2); }
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- HEADER -->
+<header>
+  <div class="logo">Sync<span>Room</span></div>
+  <div id="roomBadge" style="display:none" class="room-pill">
+    <span class="live-dot"></span>
+    <span id="roomCodeDisplay"></span>
+  </div>
+</header>
+
+<!-- LANDING -->
+<div id="landing">
+  <div class="cards">
+    <div class="card">
+      <span class="card-label">방장</span>
+      <h2>방 만들기</h2>
+      <p style="font-size:13px;color:var(--ink2);line-height:1.6">6자리 코드를 친구에게 공유하세요</p>
+      <button class="btn btn-primary" onclick="createRoom()">방 만들기 →</button>
+    </div>
+    <div class="card">
+      <span class="card-label">게스트</span>
+      <h2>방 입장</h2>
+      <input type="text" class="code-input" id="joinInput" placeholder="ABC123" maxlength="6">
+      <button class="btn btn-outline" onclick="joinRoom()">입장하기 →</button>
+    </div>
+  </div>
+  <div id="connStatus" style="font-size:13px;color:var(--ink2);text-align:center;min-height:20px"></div>
+</div>
+
+<!-- ROOM -->
+<div id="room">
+  <!-- Hidden YT -->
+  <div id="ytMount" class="yt-hidden"></div>
+
+  <!-- PLAYER -->
+  <div class="player-card">
+    <div class="player-display">
+      <div class="album-art">
+        <span class="def-icon" id="defIcon">♪</span>
+        <img id="albumImg" style="display:none" alt="">
+      </div>
+      <div class="track-meta">
+        <div class="t-title" id="trackTitle"><span class="t-idle">재생할 곡을 선택하세요</span></div>
+        <div class="t-sub" id="trackSub" style="display:none">YouTube</div>
+      </div>
+      <div class="peer-chip" id="peerChip">연결 중...</div>
+    </div>
+
+    <div class="player-error" id="playerError">
+      ⚠️ 이 영상은 외부 재생이 차단되어 있어요. 다른 링크를 시도해보세요.
+    </div>
+
+    <div class="controls">
+      <div class="prog-row">
+        <span class="time-lbl" id="timeCur">0:00</span>
+        <input type="range" id="progressBar" min="0" max="100" value="0" step="0.1">
+        <span class="time-lbl r" id="timeDur">0:00</span>
+      </div>
+      <div class="ctrl-row">
+        <div class="play-btns">
+          <button class="btn btn-ghost btn-sm" onclick="prevTrack()" title="이전 곡">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
+          </button>
+          <button class="btn-play" id="btnPlay" onclick="togglePlay()" disabled>
+            <svg id="iconPlay" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            <svg id="iconPause" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="nextTrack()" title="다음 곡">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm2.5-6 5.5 3.9V8.1L8.5 12zM16 6h2v12h-2z"/></svg>
+          </button>
+          <button class="btn btn-ghost btn-sm" id="btnRepeat" onclick="toggleRepeat()" title="반복 없음" style="opacity:0.4;display:none">
+            <svg id="iconRepeatNone" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+            <svg id="iconRepeatOne" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zm-4-2V9h-1l-2 1v1h1.5v4H13z"/></svg>
+            <svg id="iconRepeatAll" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+          </button>
+        </div>
+        <div class="vol-row">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="color:var(--ink2);flex-shrink:0"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+          <input type="range" id="volBar" min="0" max="100" value="80">
+          <span class="vol-lbl" id="volLabel">80%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM -->
+  <div class="bottom-grid">
+    <!-- PLAYLIST -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">플레이리스트</span>
+        <span id="trackCount" style="font-size:12px;color:var(--ink2)">0곡</span>
+      </div>
+      <div class="playlist-list" id="playlistEl"></div>
+    </div>
+
+    <!-- SIDE -->
+    <div class="side-col">
+      <div class="panel">
+        <div class="panel-head"><span class="panel-title">곡 추가</span></div>
+        <div class="add-form" id="addForm">
+          <input type="url" id="ytUrl" placeholder="https://youtube.com/watch?v=...">
+          <input type="text" id="ytTitle" placeholder="곡 제목 (선택)">
+          <button class="btn btn-accent btn-sm" onclick="addTrack()">＋ 추가</button>
+        </div>
+        <div class="guest-lock" id="guestLock">🔒 곡 추가/삭제는 방장만 가능해요</div>
+      </div>
+
+      <div class="panel members-panel">
+        <div class="panel-head">
+          <span class="panel-title">참여자</span>
+          <span id="memberCount" style="font-size:12px;color:var(--ink2)">0명</span>
+        </div>
+        <div class="member-list" id="memberList"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">방 설정</span>
+          <span id="roleChip" class="peer-chip"></span>
+        </div>
+        <div class="room-actions">
+          <div class="action-row">
+            <button class="btn btn-outline btn-sm" onclick="exportList()">📤 내보내기</button>
+            <button class="btn btn-outline btn-sm" onclick="document.getElementById('importEl').click()">📥 불러오기</button>
+            <input type="file" id="importEl" accept=".json" style="display:none" onchange="importList(event)">
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="copyCode()">🔗 코드 복사</button>
+          <button class="btn btn-ghost btn-sm" onclick="showMini()">🎵 미니 플레이어</button>
+          <button class="btn btn-ghost btn-sm" id="leaveBtn" onclick="confirmLeave()" style="color:var(--accent)">나가기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="overlay" id="modal">
+  <div class="modal">
+    <h3 id="modalTitle"></h3>
+    <p id="modalMsg"></p>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeModal()">취소</button>
+      <button class="btn btn-primary" id="modalOk">확인</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+// ═══════════════════════
+//  STATE
+// ═══════════════════════
+const STORE = 'syncroom_';
+const SESS  = 'syncroom_sess';
+
+let S = {
+  roomCode: null,
+  isHost: false,
+  tracks: [],
+  curIdx: -1,
+  playing: false,
+};
+
+let ytPlayer   = null;
+let ytReady    = false;
+let peer       = null;
+let hostConn   = null;
+let guestConns = [];
+let guestNames = {}; // connId -> nickname
+let seeking    = false;
+let progTimer  = null;
+let noEcho     = false;
+let repeatMode = 0; // 0=없음 1=한곡반복 2=전체반복
+
+// ═══════════════════════
+//  YT API
+// ═══════════════════════
+function onYouTubeIframeAPIReady() { ytReady = true; }
+
+function buildYT(videoId, autoplay, seekTo) {
+  document.getElementById('playerError').style.display = 'none';
+  if (ytPlayer) { try { ytPlayer.destroy(); } catch(e){} ytPlayer = null; }
+  document.getElementById('ytMount').innerHTML = '<div id="yt"></div>';
+
+  ytPlayer = new YT.Player('yt', {
+    videoId,
+    playerVars: { autoplay: autoplay?1:0, controls:0, rel:0, fs:0, modestbranding:1, playsinline:1 },
+    events: {
+      onReady(e) {
+        setVol(parseInt(document.getElementById('volBar').value));
+        document.getElementById('btnPlay').disabled = false;
+        if (seekTo > 0) e.target.seekTo(seekTo, true);
+        if (autoplay) e.target.playVideo();
+        startProg();
+        setThumb(videoId);
+      },
+      onStateChange(e) {
+        const st = e.data;
+        if (st === YT.PlayerState.ENDED) { nextTrack(); return; }
+        if (st === YT.PlayerState.PLAYING) {
+          S.playing = true;
+          setPlayIcon(true);
+          spinAlbum(true);
+          if (!noEcho) bcastCmd({ cmd:'play', time: curTime() });
+        }
+        if (st === YT.PlayerState.PAUSED) {
+          S.playing = false;
+          setPlayIcon(false);
+          spinAlbum(false);
+          if (!noEcho) bcastCmd({ cmd:'pause', time: curTime() });
+        }
+      },
+      onError() {
+        document.getElementById('playerError').style.display = 'block';
+        document.getElementById('btnPlay').disabled = true;
+      }
+    }
+  });
+}
+
+function startProg() {
+  clearInterval(progTimer);
+  progTimer = setInterval(() => {
+    if (!ytPlayer || seeking) return;
+    try {
+      const c = ytPlayer.getCurrentTime?.() ?? 0;
+      const d = ytPlayer.getDuration?.() ?? 0;
+      if (d > 0) {
+        document.getElementById('progressBar').max = d;
+        document.getElementById('progressBar').value = c;
+        document.getElementById('timeCur').textContent = fmt(c);
+        document.getElementById('timeDur').textContent = fmt(d);
+      }
+    } catch(e){}
+  }, 500);
+}
+
+function setThumb(vid) {
+  const img = document.getElementById('albumImg');
+  img.src = 'https://img.youtube.com/vi/' + vid + '/mqdefault.jpg';
+  img.style.display = 'block';
+  document.getElementById('defIcon').style.display = 'none';
+}
+
+function spinAlbum(on) { /* spin removed */ }
+
+function curTime() {
+  if (ytPlayer && ytPlayer.getCurrentTime) try { return ytPlayer.getCurrentTime(); } catch(e){}
+  return 0;
+}
+
+// ═══════════════════════
+//  PEERJS
+// ═══════════════════════
+function initPeer(id) {
+  return new Promise((res, rej) => {
+    peer = new Peer(id, { debug: 0 });
+    peer.on('open', res);
+    peer.on('error', rej);
+    peer.on('connection', conn => handleGuest(conn));
+  });
+}
+
+function handleGuest(conn) {
+  conn.on('open', () => {
+    guestConns.push(conn);
+    guestNames[conn.peer] = '게스트 ' + guestConns.length;
+    updateChip();
+    renderMembers();
+    conn.send({ type:'INIT', s: packState() });
+    showToast('🎧 ' + guestNames[conn.peer] + ' 입장!');
+  });
+  conn.on('close', () => {
+    const name = guestNames[conn.peer] || '게스트';
+    delete guestNames[conn.peer];
+    guestConns = guestConns.filter(c => c !== conn);
+    updateChip();
+    renderMembers();
+    showToast('👋 ' + name + ' 퇴장');
+  });
+  conn.on('error', () => {
+    delete guestNames[conn.peer];
+    guestConns = guestConns.filter(c => c !== conn);
+    updateChip();
+    renderMembers();
+  });
+}
+
+function connectHost(code) {
+  return new Promise((res, rej) => {
+    hostConn = peer.connect('syncroom-' + code, { reliable: true });
+    const t = setTimeout(() => rej(new Error('timeout')), 13000);
+    hostConn.on('open', () => { clearTimeout(t); res(); });
+    hostConn.on('data', msg => {
+      if (msg.type === 'INIT' || msg.type === 'STATE') applyState(msg.s);
+      if (msg.type === 'CMD') applyCmd(msg);
+    });
+    hostConn.on('close', () => { updateChip('off'); showToast('⚠️ 방장 연결 끊김'); });
+    hostConn.on('error', rej);
+  });
+}
+
+function bcastCmd(cmd) {
+  if (!S.isHost) return;
+  saveRoom();
+  guestConns.forEach(c => { try { c.send({ type:'CMD', ...cmd }); } catch(e){} });
+}
+
+function bcastState() {
+  if (!S.isHost) return;
+  saveRoom();
+  guestConns.forEach(c => { try { c.send({ type:'STATE', s: packState() }); } catch(e){} });
+}
+
+function packState() {
+  return { tracks: S.tracks, curIdx: S.curIdx, playing: S.playing, time: curTime() };
+}
+
+function applyState(s) {
+  const prev = S.curIdx;
+  S.tracks = s.tracks || [];
+  S.curIdx = s.curIdx ?? -1;
+  renderList();
+  if (S.curIdx >= 0) {
+    // 같은 곡이어도 항상 seekTo로 싱크
+    doLoad(S.curIdx, s.playing, s.time || 0);
+  }
+}
+
+function applyCmd(msg) {
+  noEcho = true;
+  if (msg.cmd === 'load') {
+    S.tracks  = msg.tracks || S.tracks;
+    S.curIdx  = msg.idx;
+    S.playing = msg.auto;
+    renderList();
+    doLoad(msg.idx, msg.auto, msg.time || 0);
+  } else if (msg.cmd === 'play') {
+    if (ytPlayer && ytPlayer.seekTo) { ytPlayer.seekTo(msg.time || 0, true); ytPlayer.playVideo(); }
+    S.playing = true;
+    setPlayIcon(true);
+  } else if (msg.cmd === 'pause') {
+    if (ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo();
+    S.playing = false;
+    setPlayIcon(false);
+  } else if (msg.cmd === 'seek') {
+    if (ytPlayer && ytPlayer.seekTo) ytPlayer.seekTo(msg.time, true);
+  } else if (msg.cmd === 'list') {
+    S.tracks = msg.tracks;
+    S.curIdx = msg.curIdx;
+    renderList();
+  }
+  setTimeout(() => { noEcho = false; }, 300);
+}
+
+function updateChip(status) {
+  const ch = document.getElementById('peerChip');
+  if (S.isHost) {
+    const n = guestConns.length;
+    ch.textContent = n > 0 ? '● ' + n + '명 연결' : '● 대기 중';
+    ch.className = 'peer-chip' + (n > 0 ? ' on' : '');
+  } else {
+    if (status === 'off') { ch.textContent = '● 연결 끊김'; ch.className = 'peer-chip warn'; }
+    else { ch.textContent = '● 연결됨'; ch.className = 'peer-chip on'; }
+  }
+}
+
+// ═══════════════════════
+//  ROOM
+// ═══════════════════════
+function genCode() {
+  const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return Array.from({length:6}, () => c[Math.floor(Math.random()*c.length)]).join('');
+}
+
+async function createRoom() {
+  const code = genCode();
+  setStatus('방을 여는 중...');
+  try {
+    await initPeer('syncroom-' + code);
+    S.roomCode = code; S.isHost = true; S.tracks = []; S.curIdx = -1;
+    saveRoom(); saveSession(); enterRoom();
+    showToast('🎛️ 방 생성! 코드: ' + code);
+    setStatus('');
+  } catch(e) {
+    setStatus('⚠️ 연결 실패. 잠시 후 다시 시도해주세요.');
+  }
+}
+
+async function joinRoom() {
+  const code = document.getElementById('joinInput').value.trim().toUpperCase();
+  if (code.length !== 6) { showToast('⚠️ 6자리 코드를 입력해주세요'); return; }
+  setStatus('방에 연결하는 중...');
+  try {
+    await initPeer('guest-' + Date.now());
+    await connectHost(code);
+    S.roomCode = code; S.isHost = false;
+    saveSession(); enterRoom(); updateChip();
+    showToast('🎧 입장!'); setStatus('');
+  } catch(e) {
+    setStatus('❌ 방을 찾을 수 없거나 연결에 실패했어요.');
+    if (peer) { peer.destroy(); peer = null; }
+  }
+}
+
+function enterRoom() {
+  document.getElementById('landing').style.display = 'none';
+  document.getElementById('room').classList.add('visible');
+  document.getElementById('roomBadge').style.display = 'flex';
+  document.getElementById('roomCodeDisplay').textContent = S.roomCode;
+  document.getElementById('roleChip').textContent = S.isHost ? '🎛 방장' : '🎧 게스트';
+  document.getElementById('leaveBtn').textContent = S.isHost ? '🗑 방 삭제' : '🚪 나가기';
+
+  if (S.isHost) {
+    document.getElementById('addForm').style.display = 'flex';
+    document.getElementById('guestLock').style.display = 'none';
+  } else {
+    document.getElementById('addForm').style.display = 'none';
+    document.getElementById('guestLock').style.display = 'block';
+  }
+
+  const sv = localStorage.getItem('sr_vol') || '80';
+  document.getElementById('volBar').value = sv;
+  document.getElementById('volLabel').textContent = sv + '%';
+  // 반복 버튼 초기 상태 — 방장만 표시
+  const rb = document.getElementById('btnRepeat');
+  if (rb) { rb.style.opacity = '0.4'; rb.style.display = S.isHost ? 'inline-flex' : 'none'; }
+  renderList();
+  renderMembers();
+}
+
+function saveRoom() {
+  localStorage.setItem(STORE + S.roomCode, JSON.stringify({ tracks: S.tracks, curIdx: S.curIdx, playing: S.playing, ts: Date.now() }));
+  // 방장이면 방 코드도 별도 저장 (새로고침 복원용)
+  if (S.isHost) localStorage.setItem('syncroom_last_host', S.roomCode);
+}
+
+function saveSession() {
+  sessionStorage.setItem(SESS, JSON.stringify({ roomCode: S.roomCode, isHost: S.isHost }));
+}
+
+// ═══════════════════════
+//  TRACKS
+// ═══════════════════════
+function getVid(url) {
+  const ps = [/[?&]v=([^&#]+)/, /youtu\.be\/([^?&#]+)/, /embed\/([^?&#]+)/, /shorts\/([^?&#]+)/];
+  for (const p of ps) { const m = url.match(p); if (m) return m[1]; }
+  return null;
+}
+
+function addTrack() {
+  if (!S.isHost) return;
+  const url   = document.getElementById('ytUrl').value.trim();
+  const title = document.getElementById('ytTitle').value.trim();
+  if (!url) { showToast('⚠️ URL을 입력해주세요'); return; }
+  const vid = getVid(url);
+  if (!vid) { showToast('⚠️ 올바른 YouTube URL이 아니에요'); return; }
+  const t = { id: Date.now(), title: title || 'YouTube 트랙', videoId: vid, url };
+  S.tracks.push(t);
+  document.getElementById('ytUrl').value = '';
+  document.getElementById('ytTitle').value = '';
+  saveRoom(); renderList();
+  bcastCmd({ cmd:'list', tracks: S.tracks, curIdx: S.curIdx });
+  showToast('✅ ' + t.title);
+}
+
+function delTrack(idx, e) {
+  e.stopPropagation();
+  if (!S.isHost) return;
+  const name = S.tracks[idx].title;
+  S.tracks.splice(idx, 1);
+  if (S.curIdx === idx) { stopAll(); S.curIdx = -1; }
+  else if (S.curIdx > idx) S.curIdx--;
+  saveRoom(); renderList();
+  bcastCmd({ cmd:'list', tracks: S.tracks, curIdx: S.curIdx });
+  showToast('🗑 ' + name);
+}
+
+function moveTrack(idx, dir, e) {
+  e.stopPropagation();
+  if (!S.isHost) return;
+  const ni = idx + dir;
+  if (ni < 0 || ni >= S.tracks.length) return;
+  [S.tracks[idx], S.tracks[ni]] = [S.tracks[ni], S.tracks[idx]];
+  if (S.curIdx === idx) S.curIdx = ni;
+  else if (S.curIdx === ni) S.curIdx = idx;
+  saveRoom(); renderList();
+  bcastCmd({ cmd:'list', tracks: S.tracks, curIdx: S.curIdx });
+}
+
+// ═══════════════════════
+//  PLAYBACK
+// ═══════════════════════
+function doLoad(idx, auto, seekTo) {
+  if (idx < 0 || idx >= S.tracks.length) return;
+  const t = S.tracks[idx];
+  S.curIdx = idx; S.playing = auto;
+  document.getElementById('trackTitle').textContent = t.title;
+  document.getElementById('trackSub').style.display = 'block';
+  document.getElementById('timeCur').textContent = '0:00';
+  document.getElementById('timeDur').textContent = '0:00';
+  document.getElementById('progressBar').value = 0;
+  setPlayIcon(auto);
+  document.getElementById('playerError').style.display = 'none';
+  // sync mini player
+  syncMiniPlayer();
+  renderList(); saveRoom();
+
+  const go = () => buildYT(t.videoId, auto, seekTo);
+  if (!ytReady) { const w = setInterval(() => { if (ytReady) { clearInterval(w); go(); }}, 200); }
+  else go();
+}
+
+function playAt(idx) {
+  if (!S.isHost && !S.isHost) {
+    // guests can click to request, but host controls; here we just allow host clicks
+  }
+  doLoad(idx, true, 0);
+  if (S.isHost) bcastCmd({ cmd:'load', idx, tracks: S.tracks, auto: true, time: 0 });
+}
+
+function stopAll() {
+  clearInterval(progTimer);
+  if (ytPlayer) { try { ytPlayer.stopVideo(); } catch(e){} }
+  document.getElementById('btnPlay').textContent = '▶';
+  document.getElementById('btnPlay').disabled = true;
+  const img = document.getElementById('albumImg');
+  img.style.display = 'none';
+  document.getElementById('defIcon').style.display = 'block';
+  S.playing = false;
+}
+
+function togglePlay() {
+  if (!ytPlayer) return;
+  try {
+    const st = ytPlayer.getPlayerState();
+    if (st === YT.PlayerState.PLAYING) ytPlayer.pauseVideo();
+    else ytPlayer.playVideo();
+  } catch(e){}
+}
+
+function prevTrack() { if (S.curIdx > 0) playAt(S.curIdx - 1); }
+function nextTrack() {
+  if (repeatMode === 1) { playAt(S.curIdx); return; }
+  if (S.curIdx < S.tracks.length - 1) playAt(S.curIdx + 1);
+  else if (repeatMode === 2) playAt(0);
+  else stopAll();
+}
+
+function setPlayIcon(playing) {
+  document.getElementById('iconPlay').style.display   = playing ? 'none'  : 'block';
+  document.getElementById('iconPause').style.display  = playing ? 'block' : 'none';
+  syncMiniPlayer();
+}
+
+function toggleRepeat() {
+  if (!S.isHost) return;
+  repeatMode = (repeatMode + 1) % 3;
+  const btn = document.getElementById('btnRepeat');
+  document.getElementById('iconRepeatNone').style.display = repeatMode === 0 ? 'block' : 'none';
+  document.getElementById('iconRepeatOne').style.display  = repeatMode === 1 ? 'block' : 'none';
+  document.getElementById('iconRepeatAll').style.display  = repeatMode === 2 ? 'block' : 'none';
+  if (repeatMode === 0) { btn.style.opacity = '0.4'; btn.title = '반복 없음'; }
+  if (repeatMode === 1) { btn.style.opacity = '1';   btn.title = '한 곡 반복'; }
+  if (repeatMode === 2) { btn.style.opacity = '1';   btn.title = '전체 반복'; }
+}
+
+function setVol(v) {
+  if (ytPlayer && ytPlayer.setVolume) { try { ytPlayer.setVolume(v); } catch(e){} }
+}
+
+// ═══════════════════════
+//  RENDER
+// ═══════════════════════
+function renderList() {
+  const el = document.getElementById('playlistEl');
+  document.getElementById('trackCount').textContent = S.tracks.length + '곡';
+  if (!S.tracks.length) {
+    el.innerHTML = '<div class="empty-pl">아직 곡이 없어요</div>';
+    return;
+  }
+  el.innerHTML = S.tracks.map((t, i) => `
+    <div class="pl-item ${i === S.curIdx ? 'active' : ''}" onclick="playAt(${i})">
+      <span class="pl-num">${i === S.curIdx ? '▶' : i+1}</span>
+      <div class="pl-info"><div class="pl-name">${esc(t.title)}</div></div>
+      ${S.isHost ? `<div class="pl-actions" onclick="event.stopPropagation()">
+        <button class="pl-btn" onclick="moveTrack(${i},-1,event)">▲</button>
+        <button class="pl-btn" onclick="moveTrack(${i},1,event)">▼</button>
+        <button class="pl-btn del" onclick="delTrack(${i},event)">✕</button>
+      </div>` : ''}
+    </div>`).join('');
+}
+
+// ═══════════════════════
+//  IMPORT / EXPORT
+// ═══════════════════════
+function exportList() {
+  const data = { version:2, roomCode: S.roomCode, exportedAt: new Date().toISOString(), tracks: S.tracks };
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data,null,2)], {type:'application/json'}));
+  a.download = 'syncroom_' + S.roomCode + '_' + Date.now() + '.json';
+  a.click();
+  showToast('📤 내보냈어요');
+}
+
+function importList(e) {
+  if (!S.isHost) { showToast('🔒 방장만 가능해요'); return; }
+  const file = e.target.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    try {
+      const d = JSON.parse(ev.target.result);
+      if (!d.tracks) throw 0;
+      S.tracks = d.tracks;
+      saveRoom(); renderList();
+      bcastCmd({ cmd:'list', tracks: S.tracks, curIdx: S.curIdx });
+      showToast('📥 ' + d.tracks.length + '곡 불러옴');
+    } catch { showToast('❌ 파일을 읽을 수 없어요'); }
+  };
+  r.readAsText(file);
+  e.target.value = '';
+}
+
+// ═══════════════════════
+//  UTILS
+// ═══════════════════════
+function fmt(s) {
+  if (isNaN(s)||s<0) return '0:00';
+  return Math.floor(s/60) + ':' + String(Math.floor(s%60)).padStart(2,'0');
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function copyCode() {
+  navigator.clipboard.writeText(S.roomCode)
+    .then(() => showToast('📋 ' + S.roomCode + ' 복사됨'))
+    .catch(() => showToast('코드: ' + S.roomCode));
+}
+
+function renderMembers() {
+  const el = document.getElementById('memberList');
+  const guests = Object.values(guestNames);
+  const total = 1 + guests.length; // host + guests
+  document.getElementById('memberCount').textContent = total + '명';
+
+  let html = `<div class="member-item">
+    <div class="member-avatar host">🎛</div>
+    <div class="member-name">방장</div>
+    <span class="member-badge badge-host">방장</span>
+  </div>`;
+
+  guests.forEach(name => {
+    html += `<div class="member-item">
+      <div class="member-avatar guest">🎧</div>
+      <div class="member-name">${esc(name)}</div>
+      <span class="member-badge badge-guest">게스트</span>
+    </div>`;
+  });
+
+  el.innerHTML = html;
+}
+
+let miniWin = null;
+let miniBC  = null;
+
+function showMini() {
+  // BroadcastChannel으로 팝업과 통신
+  if (!miniBC) {
+    miniBC = new BroadcastChannel('syncroom_mini_' + S.roomCode);
+    miniBC.onmessage = e => {
+      const m = e.data;
+      if (m.cmd === 'play')  { if (ytPlayer) ytPlayer.playVideo(); }
+      if (m.cmd === 'pause') { if (ytPlayer) ytPlayer.pauseVideo(); }
+      if (m.cmd === 'prev')  prevTrack();
+      if (m.cmd === 'next')  nextTrack();
+    };
+  }
+
+  const curTrack = S.tracks[S.curIdx];
+  const title = curTrack ? curTrack.title : '재생 중인 곡 없음';
+
+  const html = `<!DOCTYPE html><html lang="ko"><head>
+<meta charset="UTF-8">
+<title>SyncRoom 미니 플레이어</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#1a1814;color:#fff;font-family:'Pretendard',-apple-system,sans-serif;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100vh;gap:16px;padding:20px;user-select:none;}
+.title{font-size:14px;font-weight:600;text-align:center;max-width:220px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;line-height:1.4;}
+.sub{font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;text-align:center;}
+.btns{display:flex;align-items:center;gap:10px;}
+.btn{background:rgba(255,255,255,0.1);border:none;color:#fff;border-radius:10px;
+  width:40px;height:40px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:background .12s;}
+.btn:hover{background:rgba(255,255,255,0.2);}
+.btn.play{width:50px;height:50px;border-radius:50%;background:#fff;color:#1a1814;}
+.btn.play:hover{background:#e8e8e8;}
+#trackTitle{font-size:13px;font-weight:600;text-align:center;max-width:220px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+</style></head><body>
+<div id="trackTitle">${title.replace(/</g,'&lt;')}</div>
+<div class="sub" id="statusTxt">${S.playing ? '재생 중' : '일시정지'}</div>
+<div class="btns">
+  <button class="btn" id="btnPrev" title="이전">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
+  </button>
+  <button class="btn play" id="btnPlay" title="재생/정지">
+    <svg id="iPlay" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" ${S.playing?'style="display:none"':''}><path d="M8 5v14l11-7z"/></svg>
+    <svg id="iPause" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" ${S.playing?'':'style="display:none"'}><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+  </button>
+  <button class="btn" id="btnNext" title="다음">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm2.5-6 5.5 3.9V8.1L8.5 12zM16 6h2v12h-2z"/></svg>
+  </button>
+</div>
+<script>
+const bc = new BroadcastChannel('syncroom_mini_${S.roomCode}');
+let playing = ${S.playing};
+function setPlay(p){
+  playing=p;
+  document.getElementById('iPlay').style.display=p?'none':'block';
+  document.getElementById('iPause').style.display=p?'block':'none';
+  document.getElementById('statusTxt').textContent=p?'재생 중':'일시정지';
+}
+bc.onmessage=e=>{
+  if(e.data.type==='state'){
+    document.getElementById('trackTitle').textContent=e.data.title||'—';
+    setPlay(e.data.playing);
+  }
+};
+document.getElementById('btnPlay').onclick=()=>bc.postMessage({cmd:playing?'pause':'play'});
+document.getElementById('btnPrev').onclick=()=>bc.postMessage({cmd:'prev'});
+document.getElementById('btnNext').onclick=()=>bc.postMessage({cmd:'next'});
+window.onbeforeunload=()=>bc.close();
+<\/script></body></html>`;
+
+  if (miniWin && !miniWin.closed) { miniWin.focus(); return; }
+  miniWin = window.open('', 'syncroom_mini', 'width=300,height=180,resizable=no,toolbar=no,menubar=no,location=no,status=no');
+  if (!miniWin) { showToast('⚠️ 팝업이 차단됐어요. 브라우저 팝업 허용 후 다시 시도해주세요.'); return; }
+  miniWin.document.open();
+  miniWin.document.write(html);
+  miniWin.document.close();
+}
+
+function syncMiniPlayer() {
+  if (!miniBC) return;
+  const t = S.tracks[S.curIdx];
+  miniBC.postMessage({ type:'state', title: t ? t.title : '—', playing: S.playing });
+}
+
+function hideMini() {
+  if (miniWin && !miniWin.closed) miniWin.close();
+}
+
+function setStatus(msg) {
+  const el = document.getElementById('connStatus');
+  el.textContent = msg;
+}
+
+function confirmLeave() {
+  if (S.isHost) {
+    showModal('방 삭제', '방을 삭제하면 게스트도 끊어져요. 계속할까요?', () => {
+      localStorage.removeItem(STORE + S.roomCode);
+      sessionStorage.removeItem(SESS);
+      if (peer) peer.destroy();
+      location.reload();
+    });
+  } else {
+    showModal('방 나가기', '방에서 나가시겠어요?', () => {
+      sessionStorage.removeItem(SESS);
+      if (peer) peer.destroy();
+      location.reload();
+    });
+  }
+}
+
+function showModal(title, msg, cb) {
+  document.getElementById('modalTitle').textContent = title;
+  document.getElementById('modalMsg').textContent = msg;
+  document.getElementById('modal').classList.add('open');
+  document.getElementById('modalOk').onclick = () => { closeModal(); cb(); };
+}
+
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+document.getElementById('modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+
+let toastT = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// EVENTS
+window.addEventListener('DOMContentLoaded', () => {
+  const pb = document.getElementById('progressBar');
+  pb.addEventListener('mousedown',  () => seeking = true);
+  pb.addEventListener('touchstart', () => seeking = true);
+  pb.addEventListener('change', () => {
+    const v = parseFloat(pb.value);
+    if (ytPlayer && ytPlayer.seekTo) {
+      ytPlayer.seekTo(v, true);
+      if (S.isHost) bcastCmd({ cmd:'seek', time: v });
+    }
+    seeking = false;
+  });
+
+  document.getElementById('volBar').addEventListener('input', e => {
+    const v = parseInt(e.target.value);
+    document.getElementById('volLabel').textContent = v + '%';
+    setVol(v);
+    localStorage.setItem('sr_vol', v);
+  });
+
+  document.getElementById('joinInput').addEventListener('keydown', e => { if (e.key==='Enter') joinRoom(); });
+  document.getElementById('ytUrl').addEventListener('keydown',    e => { if (e.key==='Enter') addTrack(); });
+
+  // 백그라운드 재생 끊김 방지
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && S.playing && ytPlayer) {
+      try {
+        const st = ytPlayer.getPlayerState();
+        if (st !== YT.PlayerState.PLAYING) ytPlayer.playVideo();
+      } catch(e) {}
+    }
+  });
+
+  // ── 자동 복원 ──
+  autoRestore();
+});
+
+async function autoRestore() {
+  const sess = sessionStorage.getItem(SESS);
+  if (sess) {
+    // 세션 있으면 복원 시도
+    const { roomCode, isHost } = JSON.parse(sess);
+    if (isHost) {
+      // 방장: 같은 코드로 방 재개설
+      setStatus('방을 복원하는 중...');
+      const saved = localStorage.getItem(STORE + roomCode);
+      const data  = saved ? JSON.parse(saved) : null;
+      try {
+        await initPeer('syncroom-' + roomCode);
+        S.roomCode = roomCode; S.isHost = true;
+        S.tracks   = data?.tracks  || [];
+        S.curIdx   = data?.curIdx  ?? -1;
+        S.playing  = false;
+        saveRoom(); saveSession(); enterRoom();
+        showToast('🔄 방이 복원됐어요!');
+        setStatus('');
+      } catch(e) {
+        setStatus('');
+        sessionStorage.removeItem(SESS);
+      }
+    } else {
+      // 게스트: 호스트에 재연결 시도
+      setStatus('재연결하는 중...');
+      S.roomCode = roomCode; S.isHost = false;
+      tryGuestReconnect(roomCode, 0);
+    }
+    return;
+  }
+
+  // 세션 없어도 localStorage에 방장 기록 있으면 배너 표시
+  const lastHost = localStorage.getItem('syncroom_last_host');
+  if (lastHost && localStorage.getItem(STORE + lastHost)) {
+    setStatus('이전 방이 있어요. <a href="#" onclick="restoreLastRoom(event)" style="color:var(--accent);text-decoration:underline">복원하기</a>');
+  }
+}
+
+function restoreLastRoom(e) {
+  e.preventDefault();
+  const code = localStorage.getItem('syncroom_last_host');
+  if (!code) return;
+  sessionStorage.setItem(SESS, JSON.stringify({ roomCode: code, isHost: true }));
+  location.reload();
+}
+
+let reconnectTimer = null;
+function tryGuestReconnect(code, attempt) {
+  if (attempt > 8) {
+    setStatus('재연결 실패. 코드를 다시 입력해주세요.');
+    sessionStorage.removeItem(SESS);
+    return;
+  }
+  setStatus('재연결 중... (' + (attempt + 1) + '/8)');
+  initPeer('guest-' + Date.now())
+    .then(() => connectHost(code))
+    .then(() => {
+      saveSession(); enterRoom(); updateChip();
+      showToast('🔄 재연결됐어요!');
+      setStatus('');
+    })
+    .catch(() => {
+      if (peer) { peer.destroy(); peer = null; }
+      reconnectTimer = setTimeout(() => tryGuestReconnect(code, attempt + 1), 3000);
+    });
+}
+</script>
+</body>
+</html>
