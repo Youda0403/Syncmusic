@@ -475,26 +475,31 @@ function buildYT(videoId, autoplay, seekTo) {
 
   ytPlayer = new YT.Player('yt', {
     videoId,
-    playerVars: { autoplay: autoplay?1:0, controls:0, rel:0, fs:0, modestbranding:1, playsinline:1 },
+    // 모바일 autoplay 우회: muted=1로 먼저 재생 후 음소거 해제
+    playerVars: { autoplay: autoplay?1:0, controls:0, rel:0, fs:0, modestbranding:1, playsinline:1, mute: autoplay?1:0 },
     events: {
       onReady(e) {
         applyVol(parseInt(document.getElementById('volBar').value));
         if (seekTo > 0) e.target.seekTo(seekTo, true);
-        if (autoplay) e.target.playVideo();
+        if (autoplay) {
+          e.target.playVideo();
+          // 음소거 상태로 재생 시작 후 바로 음소거 해제 (모바일 autoplay 우회)
+          setTimeout(() => {
+            try { e.target.unMute(); applyVol(parseInt(document.getElementById('volBar').value)); } catch(ex){}
+          }, 800);
+        }
         document.getElementById('btnPlay').disabled = false;
         startProg();
         setThumb(videoId);
       },
       onStateChange(e) {
         const st = e.data;
-        // 곡 종료: 방장만 다음 곡 처리
         if (st === YT.PlayerState.ENDED) {
           if (R.isHost) handleEnd();
           return;
         }
         if (st === YT.PlayerState.PLAYING) {
           R.playing = true; setPlayIcon(true);
-          // 방장이 재생하면 게스트에게 브로드캐스트
           if (R.isHost) bcast({ cmd:'play', time: getCurTime() });
         }
         if (st === YT.PlayerState.PAUSED) {
@@ -1021,19 +1026,36 @@ function importList(e) {
 }
 
 // ══════════════════════════════
-//  MINI PLAYER (localStorage 통신)
+//  MINI PLAYER
 // ══════════════════════════════
 let miniWin = null;
-const MINI_STATE = 'sr_mini_state';
-const MINI_CMD   = 'sr_mini_cmd';
+let miniBC  = null;
 
 function openMiniPlayer() {
+  // BroadcastChannel은 같은 origin이면 about:blank 팝업에서도 동작
+  if (!miniBC) {
+    miniBC = new BroadcastChannel('sr_mini');
+    miniBC.onmessage = e => {
+      const cmd = e.data.cmd;
+      if (cmd === 'play' || cmd === 'pause') {
+        if (R.isHost) {
+          handlePlay_host(cmd === 'play');
+        } else {
+          if (hostConn) try { hostConn.send({ type: cmd === 'play' ? 'GUEST_PLAY' : 'GUEST_PAUSE' }); } catch(ex){}
+        }
+      }
+      if (cmd === 'prev') hostCmd('prev');
+      if (cmd === 'next') hostCmd('next');
+    };
+  }
+
+  if (miniWin && !miniWin.closed) { miniWin.focus(); syncMiniPlayer(); return; }
+
+  miniWin = window.open('', 'sr_mini', 'width=300,height=180,resizable=no,toolbar=no,menubar=no,location=no,status=no');
+  if (!miniWin) { showToast('⚠️ 팝업 차단됨. 브라우저에서 허용해주세요.'); return; }
+
   const t = R.tracks[R.curIdx];
   const title = t ? t.title : '재생 중인 곡 없음';
-
-  // localStorage에 현재 상태 기록
-  localStorage.setItem(MINI_STATE, JSON.stringify({ title, playing: R.playing, ts: Date.now() }));
-
   const html = `<!DOCTYPE html><html lang="ko"><head>
 <meta charset="UTF-8"><title>SyncRoom 미니</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
@@ -1042,76 +1064,43 @@ function openMiniPlayer() {
 body{background:#1a1814;color:#fff;font-family:'Pretendard',-apple-system,sans-serif;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   height:100vh;gap:14px;padding:20px;user-select:none}
-#title{font-size:13px;font-weight:600;text-align:center;max-width:220px;
+#ttl{font-size:13px;font-weight:600;text-align:center;max-width:220px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #sub{font-size:11px;color:rgba(255,255,255,.4);text-align:center}
 .btns{display:flex;align-items:center;gap:10px}
 .btn{background:rgba(255,255,255,.1);border:none;color:#fff;border-radius:10px;
-  width:38px;height:38px;cursor:pointer;display:flex;align-items:center;justify-content:center;
-  transition:background .12s}
+  width:38px;height:38px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .12s}
 .btn:hover{background:rgba(255,255,255,.22)}
 .btn.play{width:48px;height:48px;border-radius:50%;background:#fff;color:#1a1814}
 .btn.play:hover{background:#e8e8e8}
 </style></head><body>
-<div id="title">${title.replace(/</g,'&lt;')}</div>
-<div id="sub">${R.playing ? '재생 중' : '일시정지'}</div>
+<div id="ttl">${title.replace(/</g,'&lt;')}</div>
+<div id="sub">${R.playing?'재생 중':'일시정지'}</div>
 <div class="btns">
-  <button class="btn" id="bPrev"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
-  <button class="btn play" id="bPlay">
+  <button class="btn" onclick="send('prev')"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
+  <button class="btn play" id="bPlay" onclick="toggle()">
     <svg id="iPlay" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" ${R.playing?'style="display:none"':''}><path d="M8 5v14l11-7z"/></svg>
     <svg id="iPause" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" ${R.playing?'':'style="display:none"'}><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
   </button>
-  <button class="btn" id="bNext"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="transform:scaleX(-1)"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
+  <button class="btn" onclick="send('next')"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="transform:scaleX(-1)"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
 </div>
 <script>
-const MINI_STATE='sr_mini_state', MINI_CMD='sr_mini_cmd';
-let playing=${R.playing};
-function setP(p){
-  playing=p;
-  document.getElementById('iPlay').style.display=p?'none':'block';
-  document.getElementById('iPause').style.display=p?'block':'none';
-  document.getElementById('sub').textContent=p?'재생 중':'일시정지';
-}
-// 메인 페이지에서 상태 업데이트 수신
-window.addEventListener('storage', e => {
-  if (e.key === MINI_STATE && e.newValue) {
-    const d = JSON.parse(e.newValue);
-    document.getElementById('title').textContent = d.title || '—';
-    setP(d.playing);
-  }
-});
-// 팝업 → 메인으로 커맨드 전송
-function send(cmd){ localStorage.setItem(MINI_CMD, JSON.stringify({cmd, ts:Date.now()})); }
-document.getElementById('bPlay').onclick=()=>send(playing?'pause':'play');
-document.getElementById('bPrev').onclick=()=>send('prev');
-document.getElementById('bNext').onclick=()=>send('next');
+const bc = new BroadcastChannel('sr_mini');
+let playing = ${R.playing};
+function setP(p){ playing=p; document.getElementById('iPlay').style.display=p?'none':'block'; document.getElementById('iPause').style.display=p?'block':'none'; document.getElementById('sub').textContent=p?'재생 중':'일시정지'; }
+bc.onmessage = e => { if(e.data.type==='state'){ document.getElementById('ttl').textContent=e.data.title||'—'; setP(e.data.playing); } };
+function toggle(){ bc.postMessage({cmd: playing?'pause':'play'}); }
+function send(cmd){ bc.postMessage({cmd}); }
+window.onbeforeunload = () => bc.close();
 <\/script></body></html>`;
 
-  if (miniWin && !miniWin.closed) { miniWin.focus(); return; }
-  miniWin = window.open('', 'sr_mini', 'width=300,height=180,resizable=no,toolbar=no,menubar=no,location=no,status=no');
-  if (!miniWin) { showToast('⚠️ 팝업 차단됨. 브라우저에서 허용해주세요.'); return; }
   miniWin.document.open(); miniWin.document.write(html); miniWin.document.close();
 }
 
-// 미니 플레이어 → 메인 커맨드 수신 (localStorage storage 이벤트)
-window.addEventListener('storage', e => {
-  if (e.key !== MINI_CMD || !e.newValue) return;
-  const { cmd } = JSON.parse(e.newValue);
-  if (cmd === 'play' || cmd === 'pause') {
-    // 방장이면 직접, 게스트면 방장에게 전달
-    if (R.isHost) {
-      handlePlay_host(cmd === 'play');
-    } else {
-      if (hostConn) try { hostConn.send({ type: cmd === 'play' ? 'GUEST_PLAY' : 'GUEST_PAUSE' }); } catch(e){}
-    }
-  }
-  if (cmd === 'prev') hostCmd('prev');
-  if (cmd === 'next') hostCmd('next');
-});
-
 function syncMiniPlayer() {
+  if (!miniBC) return;
   const t = R.tracks[R.curIdx];
-  localStorage.setItem(MINI_STATE, JSON.stringify({ title: t?.title || '—', playing: R.playing, ts: Date.now() }));
+  miniBC.postMessage({ type:'state', title: t?.title || '—', playing: R.playing });
 }
 
 function handlePlay_host(play) {
