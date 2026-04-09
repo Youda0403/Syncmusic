@@ -462,6 +462,7 @@ let guestNames = {};
 // 재연결
 let reconnTimer = null;
 let synced      = false; // 게스트가 첫 동기화 완료 여부
+let guestMemberCount = 0; // 게스트 측에서 방장으로부터 받은 총 참여자 수
 
 // ══════════════════════════════
 //  YOUTUBE
@@ -583,6 +584,8 @@ function onGuestConnect(conn) {
     updateChip(); renderMembers();
     // 현재 상태 전송
     conn.send({ type: 'INIT', state: packState() });
+    // 기존 게스트들에게도 참여자 수 갱신 알림
+    bcast({ cmd:'member_update', memberCount: 1 + guestConns.length });
     showToast('🎧 ' + guestNames[conn.peer] + ' 입장!');
   });
   conn.on('data', msg => {
@@ -596,12 +599,15 @@ function onGuestConnect(conn) {
     delete guestNames[conn.peer];
     guestConns = guestConns.filter(c => c !== conn);
     updateChip(); renderMembers();
+    // 나머지 게스트들에게 참여자 수 갱신 알림
+    bcast({ cmd:'member_update', memberCount: 1 + guestConns.length });
     showToast('👋 ' + name + ' 퇴장');
   });
   conn.on('error', () => {
     delete guestNames[conn.peer];
     guestConns = guestConns.filter(c => c !== conn);
     updateChip(); renderMembers();
+    bcast({ cmd:'member_update', memberCount: 1 + guestConns.length });
   });
 }
 
@@ -638,6 +644,13 @@ function applyHostState(state, isInit) {
   R.tracks  = state.tracks  || [];
   R.curIdx  = state.curIdx  ?? -1;
   R.playing = state.playing ?? false;
+
+  // 참여자 수 갱신
+  if (state.memberCount) {
+    guestMemberCount = state.memberCount;
+    renderMembers();
+  }
+
   renderList();
 
   if (isInit) {
@@ -649,10 +662,10 @@ function applyHostState(state, isInit) {
       setThumb(t.videoId);
     }
   } else {
-    // SYNC_RESP: 이미 loadTrack으로 플레이어 로딩 중 → seekTo 보정만
+    // SYNC_RESP: 곡을 로드하고 방장의 현재 시간으로 동기화
     const time = state.time || 0;
-    if (time > 0 && ytPlayer) {
-      try { ytPlayer.seekTo(time, true); } catch(e){}
+    if (R.curIdx >= 0 && R.tracks.length > 0) {
+      loadTrack(R.curIdx, R.playing, time);
     }
   }
 }
@@ -675,6 +688,9 @@ function applyHostCmd(msg) {
   } else if (msg.cmd === 'list') {
     R.tracks = msg.tracks; R.curIdx = msg.curIdx;
     renderList();
+  } else if (msg.cmd === 'member_update') {
+    guestMemberCount = msg.memberCount || 1;
+    renderMembers();
   } else if (msg.cmd === 'stop') {
     if (ytPlayer) try { ytPlayer.stopVideo(); } catch(e){}
     R.playing = false; R.curIdx = -1;
@@ -722,7 +738,7 @@ function guestReconnect(code, attempt) {
 }
 
 function packState() {
-  return { tracks: R.tracks, curIdx: R.curIdx, playing: R.playing, time: getCurTime() };
+  return { tracks: R.tracks, curIdx: R.curIdx, playing: R.playing, time: getCurTime(), memberCount: 1 + guestConns.length };
 }
 
 function updateChip(status) {
@@ -887,17 +903,13 @@ function guestSync() {
   document.getElementById('btnPlay').disabled = false;
   synced = true;
 
-  // 이미 INIT으로 받은 상태로 즉시 로드
-  if (R.curIdx >= 0 && R.tracks.length > 0) {
-    loadTrack(R.curIdx, R.playing, 0);
-    showToast('🔄 동기화 중...');
-  } else {
-    showToast('재생 중인 곡이 없어요');
-  }
+  showToast('🔄 동기화 중...');
 
-  // 방장에게 정확한 현재 시간 요청 (seekTo 보정용)
+  // 방장에게 현재 상태 요청 → SYNC_RESP에서 곡 로드 + seekTo 처리
   if (hostConn) {
     try { hostConn.send({ type: 'GUEST_SYNC' }); } catch(e){}
+  } else {
+    showToast('⚠️ 방장과 연결되지 않았어요');
   }
 }
 
@@ -987,17 +999,39 @@ function renderList() {
 
 function renderMembers() {
   const el = document.getElementById('memberList');
-  const guests = Object.values(guestNames);
-  document.getElementById('memberCount').textContent = (1 + guests.length) + '명';
-  el.innerHTML = `<div class="member-item">
-    <div class="member-avatar host">🎛</div>
-    <div class="member-name">방장</div>
-    <span class="member-badge badge-host">방장</span>
-  </div>` + guests.map(n => `<div class="member-item">
-    <div class="member-avatar guest">🎧</div>
-    <div class="member-name">${esc(n)}</div>
-    <span class="member-badge badge-guest">게스트</span>
-  </div>`).join('');
+  if (R.isHost) {
+    const guests = Object.values(guestNames);
+    document.getElementById('memberCount').textContent = (1 + guests.length) + '명';
+    el.innerHTML = `<div class="member-item">
+      <div class="member-avatar host">🎛</div>
+      <div class="member-name">방장</div>
+      <span class="member-badge badge-host">방장</span>
+    </div>` + guests.map(n => `<div class="member-item">
+      <div class="member-avatar guest">🎧</div>
+      <div class="member-name">${esc(n)}</div>
+      <span class="member-badge badge-guest">게스트</span>
+    </div>`).join('');
+  } else {
+    // 게스트: 방장에서 받은 memberCount 사용
+    const total = guestMemberCount > 0 ? guestMemberCount : 1;
+    document.getElementById('memberCount').textContent = total + '명';
+    let html = `<div class="member-item">
+      <div class="member-avatar host">🎛</div>
+      <div class="member-name">방장</div>
+      <span class="member-badge badge-host">방장</span>
+    </div>`;
+    // 자신 포함 게스트 수만큼 표시
+    const guestCount = total - 1;
+    for (let i = 0; i < guestCount; i++) {
+      const name = i === 0 ? '나' : '게스트 ' + (i + 1);
+      html += `<div class="member-item">
+        <div class="member-avatar guest">🎧</div>
+        <div class="member-name">${name}</div>
+        <span class="member-badge badge-guest">게스트</span>
+      </div>`;
+    }
+    el.innerHTML = html;
+  }
 }
 
 // ══════════════════════════════
