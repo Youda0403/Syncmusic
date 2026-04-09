@@ -114,7 +114,7 @@ input::placeholder { color: var(--ink2); opacity: .6; }
 
 /* PLAYER */
 .player-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
-.yt-hidden { position: fixed; width: 1px; height: 1px; top: -9999px; left: -9999px; pointer-events: none; overflow: hidden; }
+.yt-hidden { width: 0; height: 0; overflow: hidden; opacity: 0; pointer-events: none; }
 
 .player-display { padding: 24px 24px 16px; display: flex; align-items: center; gap: 18px; min-height: 100px; }
 .album-art {
@@ -476,18 +476,13 @@ function buildYT(videoId, autoplay, seekTo) {
 
   ytPlayer = new YT.Player('yt', {
     videoId,
-    // 모바일 autoplay 우회: muted=1로 먼저 재생 후 음소거 해제
-    playerVars: { autoplay: autoplay?1:0, controls:0, rel:0, fs:0, modestbranding:1, playsinline:1, mute: autoplay?1:0 },
+    playerVars: { autoplay: autoplay?1:0, controls:0, rel:0, fs:0, modestbranding:1, playsinline:1, enablejsapi:1, origin: location.origin },
     events: {
       onReady(e) {
         applyVol(parseInt(document.getElementById('volBar').value));
         if (seekTo > 0) e.target.seekTo(seekTo, true);
         if (autoplay) {
           e.target.playVideo();
-          // 음소거 상태로 재생 시작 후 바로 음소거 해제 (모바일 autoplay 우회)
-          setTimeout(() => {
-            try { e.target.unMute(); applyVol(parseInt(document.getElementById('volBar').value)); } catch(ex){}
-          }, 800);
         }
         document.getElementById('btnPlay').disabled = false;
         startProg();
@@ -678,7 +673,12 @@ function applyHostCmd(msg) {
     renderList();
     loadTrack(msg.idx, msg.auto, msg.time || 0);
   } else if (msg.cmd === 'play') {
-    if (ytPlayer) try { ytPlayer.seekTo(msg.time || 0, true); ytPlayer.playVideo(); } catch(e){}
+    if (!ytPlayer && R.curIdx >= 0 && R.tracks.length > 0) {
+      // 플레이어가 없으면 곡부터 로드
+      loadTrack(R.curIdx, true, msg.time || 0);
+    } else if (ytPlayer) {
+      try { ytPlayer.seekTo(msg.time || 0, true); ytPlayer.playVideo(); } catch(e){}
+    }
     R.playing = true; setPlayIcon(true);
   } else if (msg.cmd === 'pause') {
     if (ytPlayer) try { ytPlayer.pauseVideo(); } catch(e){}
