@@ -463,10 +463,6 @@ let guestNames = {};
 let reconnTimer = null;
 let synced      = false; // 게스트가 첫 동기화 완료 여부
 
-// 미니 플레이어
-let miniWin = null;
-let miniBC  = null;
-
 // ══════════════════════════════
 //  YOUTUBE
 // ══════════════════════════════
@@ -648,18 +644,10 @@ function applyHostState(state, isInit) {
       setThumb(t.videoId);
     }
   } else {
-    // SYNC_RESP: 이미 loadTrack 됐으면 seekTo만, 아니면 full load
+    // SYNC_RESP: 이미 loadTrack으로 플레이어 로딩 중 → seekTo 보정만
     const time = state.time || 0;
-    if (ytPlayer && R.curIdx >= 0) {
-      try {
-        ytPlayer.seekTo(time, true);
-        if (R.playing) ytPlayer.playVideo();
-        else ytPlayer.pauseVideo();
-      } catch(e) {
-        loadTrack(R.curIdx, R.playing, time);
-      }
-    } else if (R.curIdx >= 0) {
-      loadTrack(R.curIdx, R.playing, time);
+    if (time > 0 && ytPlayer) {
+      try { ytPlayer.seekTo(time, true); } catch(e){}
     }
   }
 }
@@ -715,7 +703,13 @@ function guestReconnect(code, attempt) {
   if (peer) { peer.destroy(); peer = null; }
   initPeer('guest-' + Date.now())
     .then(() => connectToHost(code))
-    .then(() => { saveSession(); updateChip(); showToast('🔄 재연결됐어요!'); setStatus(''); })
+    .then(() => {
+      saveSession();
+      if (!document.getElementById('room').classList.contains('visible')) {
+        enterRoom();
+      }
+      updateChip(); showToast('🔄 재연결됐어요!'); setStatus('');
+    })
     .catch(() => {
       if (peer) { peer.destroy(); peer = null; }
       if (!R.dismissed) reconnTimer = setTimeout(() => guestReconnect(code, attempt + 1), 3000);
@@ -1027,20 +1021,19 @@ function importList(e) {
 }
 
 // ══════════════════════════════
-//  MINI PLAYER (window.open)
+//  MINI PLAYER (localStorage 통신)
 // ══════════════════════════════
+let miniWin = null;
+const MINI_STATE = 'sr_mini_state';
+const MINI_CMD   = 'sr_mini_cmd';
+
 function openMiniPlayer() {
-  if (!miniBC) {
-    miniBC = new BroadcastChannel('sr_mini_' + R.roomCode);
-    miniBC.onmessage = e => {
-      if (e.data.cmd === 'play')  handlePlay_host(true);
-      if (e.data.cmd === 'pause') handlePlay_host(false);
-      if (e.data.cmd === 'prev')  hostCmd('prev');
-      if (e.data.cmd === 'next')  hostCmd('next');
-    };
-  }
   const t = R.tracks[R.curIdx];
   const title = t ? t.title : '재생 중인 곡 없음';
+
+  // localStorage에 현재 상태 기록
+  localStorage.setItem(MINI_STATE, JSON.stringify({ title, playing: R.playing, ts: Date.now() }));
+
   const html = `<!DOCTYPE html><html lang="ko"><head>
 <meta charset="UTF-8"><title>SyncRoom 미니</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
@@ -1071,14 +1064,27 @@ body{background:#1a1814;color:#fff;font-family:'Pretendard',-apple-system,sans-s
   <button class="btn" id="bNext"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="transform:scaleX(-1)"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
 </div>
 <script>
-const bc = new BroadcastChannel('sr_mini_${R.roomCode}');
-let playing = ${R.playing};
-function setP(p){ playing=p; document.getElementById('iPlay').style.display=p?'none':'block'; document.getElementById('iPause').style.display=p?'block':'none'; document.getElementById('sub').textContent=p?'재생 중':'일시정지'; }
-bc.onmessage=e=>{ if(e.data.type==='state'){ document.getElementById('title').textContent=e.data.title||'—'; setP(e.data.playing); } };
-document.getElementById('bPlay').onclick=()=>bc.postMessage({cmd:playing?'pause':'play'});
-document.getElementById('bPrev').onclick=()=>bc.postMessage({cmd:'prev'});
-document.getElementById('bNext').onclick=()=>bc.postMessage({cmd:'next'});
-window.onbeforeunload=()=>bc.close();
+const MINI_STATE='sr_mini_state', MINI_CMD='sr_mini_cmd';
+let playing=${R.playing};
+function setP(p){
+  playing=p;
+  document.getElementById('iPlay').style.display=p?'none':'block';
+  document.getElementById('iPause').style.display=p?'block':'none';
+  document.getElementById('sub').textContent=p?'재생 중':'일시정지';
+}
+// 메인 페이지에서 상태 업데이트 수신
+window.addEventListener('storage', e => {
+  if (e.key === MINI_STATE && e.newValue) {
+    const d = JSON.parse(e.newValue);
+    document.getElementById('title').textContent = d.title || '—';
+    setP(d.playing);
+  }
+});
+// 팝업 → 메인으로 커맨드 전송
+function send(cmd){ localStorage.setItem(MINI_CMD, JSON.stringify({cmd, ts:Date.now()})); }
+document.getElementById('bPlay').onclick=()=>send(playing?'pause':'play');
+document.getElementById('bPrev').onclick=()=>send('prev');
+document.getElementById('bNext').onclick=()=>send('next');
 <\/script></body></html>`;
 
   if (miniWin && !miniWin.closed) { miniWin.focus(); return; }
@@ -1087,15 +1093,30 @@ window.onbeforeunload=()=>bc.close();
   miniWin.document.open(); miniWin.document.write(html); miniWin.document.close();
 }
 
+// 미니 플레이어 → 메인 커맨드 수신 (localStorage storage 이벤트)
+window.addEventListener('storage', e => {
+  if (e.key !== MINI_CMD || !e.newValue) return;
+  const { cmd } = JSON.parse(e.newValue);
+  if (cmd === 'play' || cmd === 'pause') {
+    // 방장이면 직접, 게스트면 방장에게 전달
+    if (R.isHost) {
+      handlePlay_host(cmd === 'play');
+    } else {
+      if (hostConn) try { hostConn.send({ type: cmd === 'play' ? 'GUEST_PLAY' : 'GUEST_PAUSE' }); } catch(e){}
+    }
+  }
+  if (cmd === 'prev') hostCmd('prev');
+  if (cmd === 'next') hostCmd('next');
+});
+
+function syncMiniPlayer() {
+  const t = R.tracks[R.curIdx];
+  localStorage.setItem(MINI_STATE, JSON.stringify({ title: t?.title || '—', playing: R.playing, ts: Date.now() }));
+}
+
 function handlePlay_host(play) {
   if (!ytPlayer) return;
   try { play ? ytPlayer.playVideo() : ytPlayer.pauseVideo(); } catch(e){}
-}
-
-function syncMiniPlayer() {
-  if (!miniBC) return;
-  const t = R.tracks[R.curIdx];
-  miniBC.postMessage({ type:'state', title: t?.title || '—', playing: R.playing });
 }
 
 // ══════════════════════════════
