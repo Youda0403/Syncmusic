@@ -141,8 +141,19 @@ function handleEnd() {
 function initPeer(id) {
   return new Promise((res, rej) => {
     peer = new Peer(id, { debug: 0 });
-    peer.on('open', res);
-    peer.on('error', rej);
+    let opened = false;
+    peer.on('open', () => { opened = true; res(); });
+    peer.on('error', err => {
+      if (!opened) { rej(err); return; }
+      // open 이후의 에러는 대부분 일시적 (예: 시그널링 서버 끊김)
+      console.warn('[peer error]', err && err.type, err && err.message);
+    });
+    // 시그널링 서버 연결 끊김 → 자동 재연결 (게스트가 방장을 다시 찾을 수 있게)
+    peer.on('disconnected', () => {
+      if (peer && !peer.destroyed) {
+        try { peer.reconnect(); } catch(e){}
+      }
+    });
     peer.on('connection', conn => onGuestConnect(conn));
   });
 }
@@ -155,6 +166,11 @@ function onGuestConnect(conn) {
     conn.send({ type: 'INIT', state: packState() });
     bcast({ cmd:'member_update', memberCount: 1 + guestConns.length });
     showToast('🎧 ' + guestNames[conn.peer] + ' 입장!');
+    // 진단: 게스트 입장 시점에 방장 플레이어 상태를 로그 (bug #3 디버그용)
+    try {
+      const st = ytPlayer?.getPlayerState?.();
+      console.log('[host] guest connected. R.playing=', R.playing, 'ytState=', st);
+    } catch(e){}
   });
   conn.on('data', msg => {
     if (msg.type === 'GUEST_PLAY')  { if (ytPlayer) try { ytPlayer.playVideo();  } catch(e){} }
@@ -458,12 +474,16 @@ function hostCmd(cmd) {
 
 function handlePlay() {
   if (R.isHost) {
-    if (!ytPlayer) return;
+    // 방어: ytPlayer가 없거나 망가져 있으면 현재 곡을 재로드 (사용자 제스처 컨텍스트 유지)
+    if (!ytPlayer) {
+      if (R.curIdx >= 0 && R.tracks.length > 0) loadTrack(R.curIdx, true, 0);
+      return;
+    }
     try {
       const st = ytPlayer.getPlayerState();
       if (st === YT.PlayerState.PLAYING) ytPlayer.pauseVideo();
       else ytPlayer.playVideo();
-    } catch(e){}
+    } catch(e){ console.warn('[handlePlay host]', e); }
   } else {
     if (!hostConn) return;
     try { hostConn.send({ type: R.playing ? 'GUEST_PAUSE' : 'GUEST_PLAY' }); } catch(e){}
@@ -737,7 +757,7 @@ function copyCode() {
     .catch(() => showToast('코드: ' + R.roomCode));
 }
 
-function setStatus(msg) { document.getElementById('connStatus').textContent = msg; }
+function setStatus(msg) { document.getElementById('connStatus').innerHTML = msg; }
 
 function confirmLeave() {
   if (R.isHost) {
