@@ -414,6 +414,10 @@ function enterRoom() {
     document.getElementById('btnSync').style.display = 'flex';
   }
 
+  // 모바일에서는 미니 플레이어 지원 불가 → 버튼 숨김
+  const miniBtn = document.getElementById('miniBtn');
+  if (miniBtn) miniBtn.style.display = isMobile() ? 'none' : '';
+
   const sv = localStorage.getItem('sr_vol') || '80';
   document.getElementById('volBar').value = sv;
   document.getElementById('volLabel').textContent = sv + '%';
@@ -657,7 +661,16 @@ function importList(e) {
 let miniWin = null;
 let miniBC  = null;
 
+function isMobile() {
+  return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 function openMiniPlayer() {
+  // 모바일은 팝업 창 미지원 → 새 탭으로 열리면서 메인 탭이 백그라운드로 가 YT가 멈춤
+  if (isMobile()) {
+    showToast('⚠️ 미니 플레이어는 PC에서만 사용할 수 있어요');
+    return;
+  }
   if (!miniBC) {
     miniBC = new BroadcastChannel('sr_mini');
     miniBC.onmessage = e => {
