@@ -464,6 +464,12 @@ let synced            = false;
 let guestMemberCount  = 0;
 let pendingSyncCurIdx = -2;    // GUEST_SYNC 전송 시점의 curIdx (-2 = 대기 없음)
 
+// 광고 감지 (게스트, 유튜브 프리미엄 미구독자)
+let guestAdPlaying        = false;  // 현재 광고 재생 중 여부
+let currentExpectedVideoId = '';    // buildYT에 요청한 videoId
+let lastHostSyncTime      = 0;      // 방장에게 마지막으로 받은 재생 시간
+let lastHostSyncAt        = 0;      // 그 시점의 Date.now()
+
 // ══════════════════════════════
 //  YOUTUBE
 // ══════════════════════════════
@@ -473,6 +479,8 @@ function buildYT(videoId, autoplay, seekTo) {
   document.getElementById('playerError').style.display = 'none';
   if (ytPlayer) { try { ytPlayer.destroy(); } catch(e){} ytPlayer = null; }
   document.getElementById('ytMount').innerHTML = '<div id="yt"></div>';
+  currentExpectedVideoId = videoId;
+  guestAdPlaying = false;
   const loadStart = Date.now();
 
   ytPlayer = new YT.Player('yt', {
@@ -499,10 +507,28 @@ function buildYT(videoId, autoplay, seekTo) {
           return;
         }
         if (st === YT.PlayerState.PLAYING) {
+          if (!R.isHost && currentExpectedVideoId) {
+            let playingId = '';
+            try { playingId = ytPlayer.getVideoData?.()?.video_id ?? ''; } catch(_) {}
+            const nowAd = playingId !== currentExpectedVideoId;
+            if (nowAd) {
+              // 광고 재생 중 — 동기화 명령 무시
+              guestAdPlaying = true;
+              return;
+            } else if (guestAdPlaying) {
+              // 광고 종료 → 방장 시간으로 즉시 복귀
+              guestAdPlaying = false;
+              if (lastHostSyncAt > 0) {
+                const estimated = lastHostSyncTime + (Date.now() - lastHostSyncAt) / 1000;
+                try { ytPlayer.seekTo(estimated, true); } catch(_) {}
+              }
+            }
+          }
           R.playing = true; setPlayIcon(true);
           if (R.isHost) bcast({ cmd:'play', time: getCurTime() });
         }
         if (st === YT.PlayerState.PAUSED) {
+          if (!R.isHost && guestAdPlaying) return; // 광고 중 pause 이벤트 무시
           R.playing = false; setPlayIcon(false);
           if (R.isHost) bcast({ cmd:'pause', time: getCurTime() });
         }
@@ -677,17 +703,24 @@ function applyHostCmd(msg) {
     renderList();
     loadTrack(msg.idx, msg.auto, msg.time || 0);
   } else if (msg.cmd === 'play') {
+    lastHostSyncTime = msg.time || 0;
+    lastHostSyncAt   = Date.now();
     if (!ytPlayer && R.curIdx >= 0 && R.tracks.length > 0) {
       loadTrack(R.curIdx, true, msg.time || 0);
     } else if (ytPlayer) {
-      try { ytPlayer.seekTo(msg.time || 0, true); ytPlayer.playVideo(); } catch(e){}
+      try {
+        if (!guestAdPlaying) ytPlayer.seekTo(msg.time || 0, true);
+        ytPlayer.playVideo();
+      } catch(e){}
     }
     R.playing = true; setPlayIcon(true);
   } else if (msg.cmd === 'pause') {
-    if (ytPlayer) try { ytPlayer.pauseVideo(); } catch(e){}
+    if (ytPlayer && !guestAdPlaying) try { ytPlayer.pauseVideo(); } catch(e){}
     R.playing = false; setPlayIcon(false);
   } else if (msg.cmd === 'seek') {
-    if (ytPlayer) try { ytPlayer.seekTo(msg.time, true); } catch(e){}
+    lastHostSyncTime = msg.time || 0;
+    lastHostSyncAt   = Date.now();
+    if (ytPlayer && !guestAdPlaying) try { ytPlayer.seekTo(msg.time, true); } catch(e){}
   } else if (msg.cmd === 'list') {
     R.tracks = msg.tracks; R.curIdx = msg.curIdx;
     renderList();
@@ -696,7 +729,9 @@ function applyHostCmd(msg) {
     renderMembers();
   } else if (msg.cmd === 'time_sync') {
     // 방장의 주기적 시간 브로드캐스트 — 2초 이상 차이날 때만 보정
-    if (ytPlayer && R.playing) {
+    lastHostSyncTime = msg.time;
+    lastHostSyncAt   = Date.now();
+    if (ytPlayer && R.playing && !guestAdPlaying) {
       try {
         const guestTime = ytPlayer.getCurrentTime?.() ?? 0;
         if (Math.abs(guestTime - msg.time) > 2) {
